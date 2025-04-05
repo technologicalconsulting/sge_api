@@ -1,1 +1,73 @@
 README INTERNO – FLUJO DE TRABAJO EN GIT
+
+**Objetivo**
+Establecer un flujo de trabajo ordenado, controlado y seguro para el desarrollo, pruebas, certificación y despliegue del sistema.
+
+**Estructura de Ramas**
+Rama	Propósito	Quién puede fusionar (merge)
+main	Producción	Solo líder de proyecto
+certification	Certificación con cliente/negocio	Solo líder de proyecto
+qa	Pruebas funcionales internas	Solo líder de proyecto
+develop	Integración de funcionalidades	Líder de proyecto y revisores autorizados
+feature/*	Desarrollo individual	Cada desarrollador
+
+**Convenciones de nombres de ramas**
+feature/login-ui
+feature/registro-usuario
+feature/correccion-bug-23
+
+**Flujo de desarrollo**
+Crea tu rama de trabajo desde develop:
+ - git checkout develop
+git checkout -b feature/mi-funcionalidad
+Trabaja y haz commits frecuentes con mensajes claros:
+
+bash
+Copiar
+Editar
+git commit -m "feat: agregada pantalla de login"
+Actualiza tu rama con los últimos cambios de develop antes de pedir revisión:
+
+bash
+Copiar
+Editar
+git pull origin develop
+git merge develop
+Crea un Pull Request (PR) hacia develop cuando termines tu tarea.
+
+El líder revisará y aprobará antes de fusionar.
+
+🔁 Flujo de pase entre entornos
+text
+Copiar
+Editar
+feature/* → develop → qa → certification → main
+Los PR a qa, certification y main serán realizados únicamente por el líder del proyecto.
+
+🔐 Reglas de seguridad en GitHub
+Las ramas qa, certification y main:
+
+❌ No aceptan push directo.
+
+✅ Requieren Pull Request con revisión.
+
+✅ Solo el líder del proyecto puede aprobar y fusionar.
+
+🧰 Buenas prácticas
+No trabajar directamente en develop, qa, certification ni main.
+
+Escribir commits claros y atómicos.
+
+Probar tu código antes de enviar PR.
+
+Mantener tus ramas actualizadas.
+
+Consultar si una tarea afecta a otros módulos antes de fusionar.
+
+📆 Reuniones de integración y pase de entornos
+Evento	Frecuencia	Responsable
+Merge develop → qa	Según sprint o avance funcional	Líder de proyecto
+Merge qa → certification	Post-pruebas QA internas	Líder de proyecto
+Merge certification → main	Post-validación con cliente	Líder de proyecto
+📞 ¿Dudas o incidencias?
+Comunícate con el líder técnico antes de hacer cambios críticos o si tienes conflictos de ramas.
