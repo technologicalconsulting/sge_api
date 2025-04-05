@@ -15,6 +15,20 @@ builder.Services.AddControllers();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+// 🔹 Configurar CORS para permitir el frontend en localhost:5173
+var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(name: MyAllowSpecificOrigins,
+        policy =>
+        {
+            policy.WithOrigins("http://localhost:5173") // Dirección del frontend
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials(); // Permitir autenticación con cookies o tokens
+        });
+});
+
 // 🔹 Configurar autenticación con JWT
 var key = Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:Secret"] ?? "ClavePorDefecto");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -33,7 +47,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
-
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<EmailService>();
 
@@ -64,6 +77,9 @@ app.UseSwaggerUI(c =>
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "SGE API v1");
     c.RoutePrefix = string.Empty; // Acceso directo a Swagger al iniciar el proyecto
 });
+
+// 🔹 Habilitar CORS antes de autenticación y autorización
+app.UseCors(MyAllowSpecificOrigins);
 
 // 🔹 Habilitar autenticación y autorización
 app.UseAuthentication();

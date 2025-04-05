@@ -3,6 +3,7 @@ using sge_api.Services;
 using sge_api.Models.Requests;
 using System.Threading.Tasks;
 using sge_api.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace sge_api.Controllers
 {
@@ -17,6 +18,34 @@ namespace sge_api.Controllers
             _authService = authService;
         }
 
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] LoginRequest request)
+        {
+            var user = await _authService.AuthenticateUser(request.Usuario, request.Password);
+
+            if (user == null)
+                return Unauthorized("Credenciales incorrectas o usuario inactivo.");
+
+            if (user.Empleado == null)
+                return BadRequest("El usuario no tiene un empleado asociado.");
+
+            if (user.Empleado.Empresa == null)
+                return BadRequest("El empleado no tiene una empresa asociada.");
+
+            bool requiereCambioPassword = user.FechaUltimoLogin == null;
+
+            return Ok(new
+            {
+                Usuario = user.Usuario,
+                NombreCompleto = $"{user.Empleado.PrimerNombre} {user.Empleado.SegundoNombre ?? ""} {user.Empleado.ApellidoPaterno} {user.Empleado.ApellidoMaterno ?? ""}".Trim(),
+                Empresa = user.Empleado.Empresa.Nombre_Comercial,
+                RequiereCambioPassword = requiereCambioPassword
+            });
+        }
+
+
+
+
         /// **Generar código de verificación para un usuario pre-registrado.**
         [HttpPost("generate-verification")]
         public async Task<IActionResult> GenerateVerification([FromBody] GenerateVerificationRequest request)
@@ -25,12 +54,15 @@ namespace sge_api.Controllers
 
             return result switch
             {
-                "OK" => Ok("Código de verificación enviado."),
-                "NOT_FOUND" => BadRequest("El empleado no está registrado."),
-                "USER_NOT_FOUND" => BadRequest("No se pudo registrar automáticamente al usuario."),
-                "CODE_EXISTS" => Conflict("Ya existe un código de verificación activo."),
-                _ => StatusCode(500, "Error interno del servidor.")
+                "NOT_FOUND" => NotFound("El usuario no existe"),
+                "USER_ALREADY_EXISTS" => Conflict("El usuario ya está registrado"),
+                "ACCOUNT_ALREADY_ACTIVE" => BadRequest("La cuenta ya está activa"),
+                "CODE_ALREADY_SENT" => StatusCode(208, "Ya se envió un código válido"), // 208: Already Reported
+                "ERROR_CREATING_USER" => StatusCode(500, "Error al crear usuario"),
+                "OK" => Ok("Código generado y enviado"),
+                _ => BadRequest("Error desconocido")
             };
+
         }
 
 

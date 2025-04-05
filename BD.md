@@ -233,30 +233,3 @@ CREATE TABLE roles_permisos (
 );
  
  
-INSERT INTO empresa (
-    razon_social, nombre_comercial, ruc, tipo_empresa, sector, direccion, ciudad, pais, telefono, email, 
-    sitio_web, logo_url, fecha_fundacion, estado, notas
-) VALUES 
-(
-    'TCR TECHNOLOGICAL CONSULTING & RISK S.A.S.', 'TECHNOLOGICAL CONSULTING', '0993392436001', 
-    'Sociedad por Acciones Simplificada (SAS)', 'Servicios Tecnológicos', 
-    'Av. 9 de Octubre 123, Guayaquil', 'Guayaquil', 'Ecuador', '0963973280', 'info@technologicalconsulting.com', 
-    'https://technologicalconsulting.com', 'https://technologicalconsulting.com/logo.png', 
-    '2015-07-31', 'Activo', 'Empresa líder en seguridad informática'
-),
-(
-    'Innovatech S.A.', 'Innovatech', '099987654321', 
-    'Compañía de Responsabilidad Limitada (Cía. Ltda.)', 'Desarrollo de Software', 
-    'Av. Amazonas 456, Quito', 'Quito', 'Ecuador', '0991234567', 'contacto@innovatech.com', 
-    'https://innovatech.com', 'https://innovatech.com/logo.png', 
-    '2018-09-15', 'Activo', 'Empresa enfocada en soluciones fintech'
-);
-
-SELECT * FROM empleado;
-
-INSERT INTO empleado (empresa_id, primer_nombre, segundo_nombre, apellido_paterno, apellido_materno, numero_identificacion, email_personal, email_corporativo, telefono, direccion, fecha_nacimiento, genero, estado, fecha_registro)
-VALUES 
-(1, 'ALEX', 'RUBEN', 'BARRE', 'GABILANES', '0953130390', 'alexruben611@gmail.com', 'maria.veloz@technologicalconsulting.com', '0967532016', 'COOP ENNER PARRALES MZ837 SL25A', '1999-11-06', 'Masculino', 'Activo', CURRENT_TIMESTAMP),
-(1, 'MARIA', 'ISABEL', 'VELOZ', 'SUAREZ', '0954721536', 'mariaisabelvelozsuarez@gmail.com', 'maria.veloz@technologicalconsulting.com', '0980748006', 'Guasmo Sur Coop. Martha Bucarám de Roldós, Calles: 3 Pasaje 11H se y 6 Pa. 56 SE, Mz: 2327 Sl:10', '2000-10-10', 'Femenino', 'Activo', CURRENT_TIMESTAMP);
-
-

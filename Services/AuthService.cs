@@ -2,7 +2,6 @@
 using sge_api.Data;
 using sge_api.Models;
 using System.Security.Cryptography;
-using System.Text;
 using BCrypt.Net;
 
 namespace sge_api.Services
@@ -18,58 +17,77 @@ namespace sge_api.Services
             _emailService = emailService;
         }
 
-        // 📌 **Paso 1: Generar código de verificación después de crear el usuario**
+        // Generar código de verificación después de crear el usuario
         public async Task<string> GenerarCodigoVerificacion(string numeroIdentificacion)
         {
-            // 🔹 **Verificar si el empleado está registrado**
             var empleado = await _context.Empleados
                 .FirstOrDefaultAsync(e => e.NumeroIdentificacion == numeroIdentificacion);
 
             if (empleado == null)
                 return "NOT_FOUND"; // No existe el empleado en la base de datos
 
-            // 🔹 **Verificar si el usuario ya está registrado**
             var existingUser = await _context.Usuarios
                 .FirstOrDefaultAsync(u => u.EmpleadoId == empleado.Id);
 
-            if (existingUser == null)
+            try
             {
-                // ✅ **Si no existe, crear usuario en la tabla `users`**
-                existingUser = new Users
+                if (existingUser == null)
                 {
-                    EmpleadoId = empleado.Id,
-                    NumeroIdentificacion = empleado.NumeroIdentificacion,
-                    Usuario = await GenerarUsuarioUnico(empleado),
-                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(GenerarContraseñaAleatoria()),
-                    Estado = "Activo",
-                    FechaRegistro = DateTime.UtcNow
-                };
+                    existingUser = new Users
+                    {
+                      EmpleadoId = empleado.Id,
+                      NumeroIdentificacion = empleado.NumeroIdentificacion,
+                      Usuario = await GenerarUsuarioUnico(empleado),
+                      // PasswordHash = BCrypt.Net.BCrypt.HashPassword(GenerarContraseñaAleatoria()),
+                      PasswordHash = GenerarContraseñaAleatoria(),
+                      Estado = "Inactivo",
+                      FechaRegistro = DateTime.UtcNow
+                    };
 
-                _context.Usuarios.Add(existingUser);
-                await _context.SaveChangesAsync();
+                    _context.Usuarios.Add(existingUser);
+                    await _context.SaveChangesAsync();
 
-                // ✅ **Asignar Email Corporativo**
-                await GenerarEmailCorporativo(empleado, existingUser.Usuario);
+                    // Asignar Email Corporativo
+                    await GenerarEmailCorporativo(empleado, existingUser.Usuario);
+                }
+            }
+            catch (DbUpdateException ex)
+            {
+                // Aquí puedes revisar si la excepción es por duplicado
+                if (ex.InnerException?.Message.Contains("duplicate") == true ||
+                    ex.Message.Contains("IX_Usuarios_NumeroIdentificacion")) // por ejemplo
+                {
+                    return "USER_ALREADY_EXISTS";
+                }
+
+                // O cualquier otro tipo de excepción
+                return "ERROR_CREATING_USER";
             }
 
-            // 🔹 **Verificar si ya tiene un código de verificación**
-            var existingCode = await _context.CodigosVerificacion
-                .Where(c => c.UsuarioId == existingUser.Id && c.Tipo == "Registro")
-                .OrderByDescending(c => c.FechaGeneracion)
+            // Verifica si tiene un código usado
+            var usedCode = await _context.CodigosVerificacion
+                .Where(c => c.UsuarioId == existingUser.Id && c.Tipo == "Registro" && c.Usado)
                 .FirstOrDefaultAsync();
 
+            if (usedCode != null)
+                return "ACCOUNT_ALREADY_ACTIVE";
+
+            // Verifica si tiene un código aún válido
+            var existingCode = await _context.CodigosVerificacion
+              .Where(c => c.UsuarioId == existingUser.Id && c.Tipo == "Registro")
+              .OrderByDescending(c => c.FechaGeneracion)
+              .FirstOrDefaultAsync();
+
+            if (existingCode != null && !existingCode.Usado && existingCode.Expiracion > DateTime.UtcNow)
+                return "CODE_ALREADY_SENT";
+
+            // Verifica si Tiene código anterior expirado, Lo elimina y genera uno nuevo
             if (existingCode != null)
             {
-                // ✅ **Si el código es válido y no ha expirado, NO generar otro**
-                if (!existingCode.Usado && existingCode.Expiracion > DateTime.UtcNow)
-                    return "CODE_ALREADY_SENT"; // Código aún válido
-
-                // ✅ **Si el código ya expiró, eliminarlo**
                 _context.CodigosVerificacion.Remove(existingCode);
                 await _context.SaveChangesAsync();
             }
 
-            // ✅ **Generar un nuevo código de verificación**
             var verificationCode = GenerateVerificationCode();
             var codeEntry = new CodigosVerificacion
             {
@@ -77,32 +95,41 @@ namespace sge_api.Services
                 Codigo = verificationCode,
                 Tipo = "Registro",
                 FechaGeneracion = DateTime.UtcNow,
-                Expiracion = DateTime.UtcNow.AddMinutes(15), // Expira en 15 minutos
+                Expiracion = DateTime.UtcNow.AddMinutes(15),
                 Usado = false
             };
 
             _context.CodigosVerificacion.Add(codeEntry);
             await _context.SaveChangesAsync();
 
-            // ✅ **Enviar el código de verificación al correo personal**
-            await _emailService.SendVerificationEmail(empleado.EmailPersonal, verificationCode);
+            // 🔄 Enviar el correo en segundo plano (no se espera a que termine)
+            _ = Task.Run(async () =>
+            {
+                await _emailService.SendVerificationEmail(empleado.EmailPersonal, verificationCode);
+            });
 
-            return "OK"; // Registro completado
+            return "OK";
         }
 
-
-
-
-        // 📌 **Paso 2: Completar el registro tras verificar el código**
+        // 🔹 **Paso 2: Completar el registro tras verificar el código**
         public async Task<string> CompletarRegistro(string numeroIdentificacion, string codigo)
         {
-            var empleado = await _context.Empleados.FirstOrDefaultAsync(e => e.NumeroIdentificacion == numeroIdentificacion);
+            var empleado = await _context.Empleados
+                .FirstOrDefaultAsync(e => e.NumeroIdentificacion == numeroIdentificacion);
             if (empleado == null)
                 return "NOT_FOUND";
 
-            var user = await _context.Usuarios.FirstOrDefaultAsync(u => u.EmpleadoId == empleado.Id);
+            var user = await _context.Usuarios
+                .FirstOrDefaultAsync(u => u.EmpleadoId == empleado.Id);
             if (user == null)
                 return "NO_USER";
+
+            var usedCode = await _context.CodigosVerificacion
+                .Where(c => c.UsuarioId == user.Id && c.Tipo == "Registro" && c.Usado)
+                .FirstOrDefaultAsync();
+
+            if (usedCode != null)
+                return "ACCOUNT_ALREADY_ACTIVE";
 
             var codeEntry = await _context.CodigosVerificacion
                 .Where(c => c.UsuarioId == user.Id && c.Tipo == "Registro" && !c.Usado && c.Expiracion > DateTime.UtcNow)
@@ -111,20 +138,53 @@ namespace sge_api.Services
             if (codeEntry == null || codeEntry.Codigo != codigo)
                 return "INVALID_CODE";
 
-            // ✅ **Marcar código como usado**
             codeEntry.Usado = true;
+            user.Estado = "Activo";
+
             await _context.SaveChangesAsync();
 
-            // ✅ **Enviar credenciales de acceso**
-            await _emailService.SendUserCredentials(empleado.EmailPersonal, user.Usuario, "Tu contraseña fue establecida en el registro.");
+            // 🔄 Enviar el correo en segundo plano
+            _ = Task.Run(() =>
+            {
+                _emailService.SendUserCredentials(
+                    empleado.EmailPersonal,
+                    user.Usuario,
+                    "Tu contraseña fue establecida en el registro."
+                );
+            });
 
             return "OK";
         }
 
-       
 
+        // 🔹 **Paso 3: Autenticación de usuario**
+        public async Task<Users> AuthenticateUser(string usuario, string password)
+{
+    var user = await _context.Usuarios
+        .Include(u => u.Empleado) // Incluye la relación con Empleado
+        .ThenInclude(e => e.Empresa) // Incluye la relación con Empresa
+        .FirstOrDefaultAsync(u => u.Usuario == usuario);
 
-        // 📌 **Generar usuario único**
+    // if (user == null || !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
+    //     return null;
+
+    if (user.PasswordHash != password) // ⚠️ Solo para pruebas, no usar en producción
+    return null;
+
+            if (user.Estado != "Activo")
+        return null;
+
+    // Actualizar la fecha de último login si no es el primer inicio de sesión
+    if (user.FechaUltimoLogin == null)
+    {
+        user.FechaUltimoLogin = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+    }
+
+    return user;
+}
+
+        // 🔹 **Generar usuario único**
         private async Task<string> GenerarUsuarioUnico(Empleado empleado)
         {
             string usuario;
@@ -145,9 +205,6 @@ namespace sge_api.Services
                     case 3:
                         usuario = $"{empleado.PrimerNombre.Substring(0, 1).ToLower()}.{empleado.ApellidoPaterno.ToLower()}";
                         break;
-                    case 4:
-                        usuario = $"{empleado.PrimerNombre.Substring(0, 1).ToLower()}.{empleado.ApellidoPaterno.ToLower()}.{empleado.ApellidoMaterno?.Substring(0, 1).ToLower() ?? ""}";
-                        break;
                     default:
                         usuario = $"{empleado.PrimerNombre.ToLower()}.{empleado.ApellidoPaterno.ToLower()}{intento}";
                         break;
@@ -160,11 +217,11 @@ namespace sge_api.Services
             return usuario;
         }
 
-        // 📌 **Generar Email Corporativo**
+        // 🔹 **Generar Email Corporativo**
         private async Task GenerarEmailCorporativo(Empleado empleado, string usuario)
         {
             if (!string.IsNullOrEmpty(empleado.EmailCorporativo))
-                return; // Ya tiene un email corporativo asignado
+                return;
 
             var empresa = await _context.Empresas
                 .Where(e => e.Id == empleado.EmpresaId)
@@ -176,17 +233,15 @@ namespace sge_api.Services
                 string dominio = ExtraerDominio(empresa);
                 if (!string.IsNullOrEmpty(dominio))
                 {
-                    // ✅ **Asignar email corporativo**
                     empleado.EmailCorporativo = $"{usuario}@{dominio}".ToLower();
 
-                    // ✅ **Actualizar en la base de datos**
                     _context.Empleados.Update(empleado);
                     await _context.SaveChangesAsync();
                 }
             }
         }
 
-        // 📌 **Extraer dominio del sitio web**
+        // 🔹 **Extraer dominio del sitio web**
         private string ExtraerDominio(string url)
         {
             try
@@ -194,18 +249,16 @@ namespace sge_api.Services
                 if (string.IsNullOrEmpty(url))
                     return "";
 
-                // 🔹 Eliminar 'http://', 'https://', 'www.' y dejar solo el dominio
                 Uri uri = new Uri(url);
-                string dominio = uri.Host.Replace("www.", "");
-                return dominio;
+                return uri.Host.Replace("www.", "");
             }
             catch
             {
-                return ""; // En caso de error, devuelve vacío
+                return "";
             }
         }
 
-        // 📌 **Generar Contraseña Aleatoria**
+        // 🔹 **Generar Contraseña Aleatoria**
         private string GenerarContraseñaAleatoria()
         {
             const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
@@ -214,15 +267,13 @@ namespace sge_api.Services
               .Select(s => s[random.Next(s.Length)]).ToArray());
         }
 
-        // 📌 **Generar Código de Verificación Aleatorio**
+        // 🔹 **Generar Código de Verificación Aleatorio**
         private string GenerateVerificationCode()
         {
             using var rng = RandomNumberGenerator.Create();
             var bytes = new byte[4];
             rng.GetBytes(bytes);
-            int code = BitConverter.ToInt32(bytes, 0) % 1000000; // Asegurar un número de 6 dígitos
-            code = Math.Abs(code);
-            return code.ToString("D6");
+            return (Math.Abs(BitConverter.ToInt32(bytes, 0)) % 1000000).ToString("D6");
         }
     }
 }

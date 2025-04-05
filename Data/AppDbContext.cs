@@ -83,6 +83,15 @@ namespace sge_api.Data
             return await base.SaveChangesAsync(cancellationToken);
         }
 
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Empleado>()
+                .HasOne(e => e.Empresa)
+                .WithMany()  // Si en `Empresa` hay una lista de empleados, usa `.WithMany(emp => emp.Empleados)`
+                .HasForeignKey(e => e.EmpresaId)
+                .OnDelete(DeleteBehavior.Restrict);
+        }
+
         // 🔹 Método para extraer el dominio del sitio web
         private string ExtraerDominio(string url)
         {

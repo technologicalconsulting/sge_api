@@ -14,6 +14,9 @@ namespace sge_api.Models
         [Column("empresa_id")]
         public int EmpresaId { get; set; }
 
+        [ForeignKey("EmpresaId")]
+        public Empresa Empresa { get; set; }
+
         [Column("primer_nombre")]
         public string PrimerNombre { get; set; }
 
