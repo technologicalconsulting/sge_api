@@ -1,5 +1,5 @@
 ﻿-- Crear la base de datos (si no existe)
-CREATE DATABASE SGE;
+CREATE DATABASE SGE ENCODING 'UTF8' LC_COLLATE='es_EC.UTF-8' LC_CTYPE='es_EC.UTF-8';
 
 -- Tabla empresa
 CREATE TABLE empresa (
@@ -29,34 +29,7 @@ CREATE TABLE empresa (
     notas TEXT
 );
 
-
--- Tabla clientes con relación a empresa
-CREATE TABLE clientes (
-    id SERIAL PRIMARY KEY,
-    empresa_id INTEGER REFERENCES empresa(id) ON DELETE CASCADE,
-    razon_social VARCHAR(255) NOT NULL,
-    nombre_comercial VARCHAR(255),
-    ruc VARCHAR(20) UNIQUE NOT NULL,
-    tipo_empresa VARCHAR(50) CHECK (tipo_empresa IN (
-        'Sociedad Anónima (SA)', 
-        'Sociedad por Acciones Simplificada (SAS)', 
-        'Compañía de Responsabilidad Limitada (Cía. Ltda.)', 
-        'Compañía en Nombre Colectivo', 
-        'Compañía en Comandita Simple', 
-        'Compañía en Comandita por Acciones'
-    )) NOT NULL,
-    sector VARCHAR(100),
-    direccion TEXT NOT NULL,
-    ciudad VARCHAR(100),
-    pais VARCHAR(100) NOT NULL,
-    sitio_web VARCHAR(255),
-    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    estado VARCHAR(50) CHECK (estado IN ('Activo', 'Inactivo', 'Suspendido')) DEFAULT 'Activo',
-    limite_credito DECIMAL(15,2) DEFAULT 0.00,
-    notas TEXT
-);
-
--- Tabla contactos_clientes para múltiples contactos por cliente
+-- Tabla contactos_clientes
 CREATE TABLE contactos_clientes (
     id SERIAL PRIMARY KEY,
     cliente_id INTEGER REFERENCES clientes(id) ON DELETE CASCADE,
@@ -93,11 +66,12 @@ CREATE TABLE empleado_cliente (
     id SERIAL PRIMARY KEY,
     empleado_id INTEGER REFERENCES empleado(id) ON DELETE CASCADE,
     cliente_id INTEGER REFERENCES clientes(id) ON DELETE CASCADE,
+    contactos_clientes_id INTEGER REFERENCES contactos_clientes(id) ON DELETE CASCADE,
     fecha_asignacion DATE DEFAULT CURRENT_DATE,
     fecha_fin DATE NULL,
-    estado VARCHAR(20) CHECK (estado IN ('Activo', 'Finalizado', 'Pendiente')) DEFAULT 'Activo'
+    estado VARCHAR(20) CHECK (estado IN ('Activo', 'Finalizado', 'Pendiente')) DEFAULT 'Activo',
+    UNIQUE(empleado_id, cliente_id, contactos_clientes_id)
 );
-
 
 -- Listado de Departamentos
 CREATE TABLE departamentos (
@@ -114,52 +88,39 @@ CREATE TABLE cargos (
     nombre VARCHAR(100) NOT NULL,  
     descripcion TEXT,              
     departamento_id INTEGER REFERENCES departamentos(id) ON DELETE SET NULL, 
+    presupuesto_salarial NUMERIC(10,2),
+    nivel VARCHAR(20) NOT NULL CHECK (nivel IN ('training', 'junior', 'semisenior', 'senior')),
     UNIQUE(nombre, empresa_id)  
-);
-
--- Información Laboral del Usuario
-CREATE TABLE informacion_laboral_empleado (
-    id SERIAL PRIMARY KEY,
-    empleado_id INTEGER REFERENCES empleado(id) ON DELETE CASCADE, -- Empleado al que se le asigna la información laboral
-    empresa_id INTEGER REFERENCES empresa(id) ON DELETE CASCADE, -- Empresa donde trabaja
-    departamento_id INTEGER REFERENCES departamentos(id) ON DELETE SET NULL, -- Departamento (si aplica)
-    cargo_id INTEGER REFERENCES cargos(id) ON DELETE SET NULL, -- Cargo dentro de la empresa
-    fecha_ingreso DATE NOT NULL, -- Fecha de ingreso
-    fecha_salida DATE, -- Fecha de salida (si aplica)
-    salario DECIMAL(10,2), -- Salario del empleado
-    tipo_contrato VARCHAR(50) CHECK (tipo_contrato IN ('Indefinido', 'Temporal', 'Pasante', 'Contrato por obra', 'Freelance')),
-    
-    -- Supervisor Interno (Empleado de la Empresa)
-    supervisor_interno_id INTEGER REFERENCES empleado(id) ON DELETE SET NULL,
-    
-    -- Supervisor Externo (Contacto del Cliente)
-    supervisor_externo_id INTEGER REFERENCES contactos_clientes(id) ON DELETE SET NULL,
-
-    notas TEXT -- Campo para observaciones adicionales
-);
-
--- Tabla historial_sesiones
-CREATE TABLE historial_sesiones (
-    id SERIAL PRIMARY KEY,
-    empleado_id INTEGER REFERENCES empleado(id) ON DELETE CASCADE,
-    ip VARCHAR(45),
-    fecha_hora TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    navegador VARCHAR(255),
-    exito BOOLEAN DEFAULT TRUE
 );
 
 -- Tabla de User del Sistema (Autenticación)
 CREATE TABLE users(
     id SERIAL PRIMARY KEY,
     empleado_id INTEGER UNIQUE REFERENCES empleado(id) ON DELETE CASCADE,
-    numero_identificacion VARCHAR(20) UNIQUE NOT NULL,
     usuario VARCHAR(255) UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     intentos_fallidos INTEGER DEFAULT 0,
+    fecha_ultimo_intento_fallido TIMESTAMP,
     bloqueado BOOLEAN DEFAULT FALSE,
     estado VARCHAR(20) CHECK (estado IN ('Activo', 'Inactivo', 'Bloqueado')) DEFAULT 'Activo',
     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     fecha_ultimo_login TIMESTAMP DEFAULT NULL
+);
+
+CREATE TABLE historial_eventos_usuario (
+    id SERIAL PRIMARY KEY,
+    usuario_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    empleado_id INTEGER REFERENCES empleado(id) ON DELETE CASCADE,
+    tipo_evento VARCHAR(50) NOT NULL CHECK (tipo_evento IN (
+        'intento_acceso', 'bloqueo', 'recuperacion', 'sesion'
+    )),
+    fecha_evento TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    exito BOOLEAN,
+    ip VARCHAR(45),
+    navegador VARCHAR(255),
+    razon TEXT,
+    motivo TEXT,
+    fecha_cambio TIMESTAMP
 );
 
 -- Tabla para códigos de validación de registro y recuperación de contraseña
@@ -171,65 +132,23 @@ CREATE TABLE codigos_verificacion (
     fecha_generacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     expiracion TIMESTAMP NOT NULL,
     usado BOOLEAN DEFAULT FALSE
+-- Evitar múltiples códigos activos del mismo tipo por usuario
+    UNIQUE(usuario_id, tipo)
 );
 
--- Historial de intentos de acceso
-CREATE TABLE historial_intentos (
+
+
+
+-- Información Laboral del Empelado
+CREATE TABLE informacion_laboral_empleado (
     id SERIAL PRIMARY KEY,
-    usuario_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    fecha_hora TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    exito BOOLEAN NOT NULL,
-    ip VARCHAR(45),
-    navegador VARCHAR(255)
+    empleado_id INTEGER REFERENCES empleado(id) ON DELETE CASCADE, -- Empleado al que se le asigna la información laboral
+    empresa_id INTEGER REFERENCES empresa(id) ON DELETE CASCADE, -- Empresa donde trabaja
+    departamento_id INTEGER REFERENCES departamentos(id) ON DELETE SET NULL, -- Departamento (si aplica)
+    cargo_id INTEGER REFERENCES cargos(id) ON DELETE SET NULL, -- Cargo dentro de la empresa
+    fecha_ingreso DATE NOT NULL, -- Fecha de ingreso
+    fecha_salida DATE, -- Fecha de salida (si aplica)
+    salario DECIMAL(10,2), -- Salario del empleado
+    tipo_contrato VARCHAR(50) CHECK (tipo_contrato IN ('Indefinido', 'Temporal', 'Pasante', 'Contrato por obra', 'Freelance')),
+    notas TEXT -- Campo para observaciones adicionales
 );
-
--- Historial de bloqueos de user
-CREATE TABLE historial_bloqueos (
-    id SERIAL PRIMARY KEY,
-    usuario_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    fecha_bloqueo TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    razon TEXT NOT NULL,
-    motivo_bloqueo TEXT
-);
-
--- Historial de recuperación de contraseñas
-CREATE TABLE historial_recuperacion (
-    id SERIAL PRIMARY KEY,
-    usuario_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    fecha_solicitud TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    fecha_cambio TIMESTAMP DEFAULT NULL,
-    exito BOOLEAN DEFAULT FALSE
-);
-
--- Tabla de Roles del Sistema
-CREATE TABLE roles (
-    id SERIAL PRIMARY KEY,
-    nombre VARCHAR(50) UNIQUE NOT NULL,  -- Ej: Administrador, Usuario, Supervisor
-    descripcion TEXT
-);
-
-
--- Relación de User con Roles
-CREATE TABLE users_roles (
-    id SERIAL PRIMARY KEY,
-    usuario_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    rol_id INTEGER REFERENCES roles(id) ON DELETE CASCADE,
-    UNIQUE(usuario_id, rol_id)
-);
-
--- Tabla de Permisos del Sistema
-CREATE TABLE permisos (
-    id SERIAL PRIMARY KEY,
-    nombre VARCHAR(100) UNIQUE NOT NULL,
-    descripcion TEXT
-);
-
--- Relación de Permisos con Roles
-CREATE TABLE roles_permisos (
-    id SERIAL PRIMARY KEY,
-    rol_id INTEGER REFERENCES roles(id) ON DELETE CASCADE,
-    permiso_id INTEGER REFERENCES permisos(id) ON DELETE CASCADE,
-    UNIQUE(rol_id, permiso_id)
-);
- 
- 
