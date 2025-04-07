@@ -17,7 +17,7 @@ namespace sge_api.Services
             _emailService = emailService;
         }
 
-        // Generar código de verificación después de crear el usuario
+        // Generar código de verificación
         public async Task<string> GenerarCodigoVerificacion(string numeroIdentificacion)
         {
             var empleado = await _context.Empleados
@@ -36,7 +36,7 @@ namespace sge_api.Services
                     existingUser = new Users
                     {
                       EmpleadoId = empleado.Id,
-                      NumeroIdentificacion = empleado.NumeroIdentificacion,
+                      // NumeroIdentificacion = empleado.NumeroIdentificacion,
                       Usuario = await GenerarUsuarioUnico(empleado),
                       // PasswordHash = BCrypt.Net.BCrypt.HashPassword(GenerarContraseñaAleatoria()),
                       PasswordHash = GenerarContraseñaAleatoria(),
@@ -49,6 +49,15 @@ namespace sge_api.Services
 
                     // Asignar Email Corporativo
                     await GenerarEmailCorporativo(empleado, existingUser.Usuario);
+
+                    // Registrar evento: usuario creado
+                    await RegistrarEventoUsuario(
+                        existingUser.Id,
+                        empleado.Id,
+                        "registro",
+                        true,
+                        razon: "Usuario creado exitosamente"
+                    );
                 }
             }
             catch (DbUpdateException ex)
@@ -102,7 +111,7 @@ namespace sge_api.Services
             _context.CodigosVerificacion.Add(codeEntry);
             await _context.SaveChangesAsync();
 
-            // 🔄 Enviar el correo en segundo plano (no se espera a que termine)
+            // Enviar el correo en segundo plano
             _ = Task.Run(async () =>
             {
                 await _emailService.SendVerificationEmail(empleado.EmailPersonal, verificationCode);
@@ -111,7 +120,7 @@ namespace sge_api.Services
             return "OK";
         }
 
-        // 🔹 **Paso 2: Completar el registro tras verificar el código**
+        // Completar el registro tras verificar el código
         public async Task<string> CompletarRegistro(string numeroIdentificacion, string codigo)
         {
             var empleado = await _context.Empleados
@@ -136,14 +145,17 @@ namespace sge_api.Services
                 .FirstOrDefaultAsync();
 
             if (codeEntry == null || codeEntry.Codigo != codigo)
+            {
+                await RegistrarEventoUsuario(user.Id, empleado.Id, "registro", false, razon: "Código inválido");
                 return "INVALID_CODE";
+            }
 
             codeEntry.Usado = true;
             user.Estado = "Activo";
-
             await _context.SaveChangesAsync();
 
-            // 🔄 Enviar el correo en segundo plano
+            await RegistrarEventoUsuario(user.Id, empleado.Id, "registro", true, razon: "Cuenta activada correctamente");
+
             _ = Task.Run(() =>
             {
                 _emailService.SendUserCredentials(
@@ -156,35 +168,66 @@ namespace sge_api.Services
             return "OK";
         }
 
-
-        // 🔹 **Paso 3: Autenticación de usuario**
+        // Autenticación de usuario
         public async Task<Users> AuthenticateUser(string usuario, string password)
-{
-    var user = await _context.Usuarios
-        .Include(u => u.Empleado) // Incluye la relación con Empleado
-        .ThenInclude(e => e.Empresa) // Incluye la relación con Empresa
-        .FirstOrDefaultAsync(u => u.Usuario == usuario);
+        {
+            var user = await _context.Usuarios
+                .Include(u => u.Empleado)
+                .ThenInclude(e => e.Empresa)
+                .FirstOrDefaultAsync(u => u.Usuario == usuario);
 
-    // if (user == null || !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
-    //     return null;
+            if (user == null || user.PasswordHash != password)
+            {
+                if (user != null)
+                {
+                    await RegistrarEventoUsuario(
+                        user.Id,
+                        user.EmpleadoId,
+                        "intento_acceso",
+                        false,
+                        ip: "127.0.0.1",
+                        navegador: "Desconocido",
+                        razon: "Credenciales inválidas"
+                    );
+                }
 
-    if (user.PasswordHash != password) // ⚠️ Solo para pruebas, no usar en producción
-    return null;
+                return null;
+            }
 
             if (user.Estado != "Activo")
-        return null;
+            {
+                await RegistrarEventoUsuario(
+                    user.Id,
+                    user.EmpleadoId,
+                    "intento_acceso",
+                    false,
+                    ip: "127.0.0.1",
+                    navegador: "Desconocido",
+                    razon: "Usuario inactivo"
+                );
 
-    // Actualizar la fecha de último login si no es el primer inicio de sesión
-    if (user.FechaUltimoLogin == null)
-    {
-        user.FechaUltimoLogin = DateTime.UtcNow;
-        await _context.SaveChangesAsync();
-    }
+                return null;
+            }
 
-    return user;
-}
+            if (user.FechaUltimoLogin == null)
+            {
+                user.FechaUltimoLogin = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+            }
 
-        // 🔹 **Generar usuario único**
+            await RegistrarEventoUsuario(
+                user.Id,
+                user.EmpleadoId,
+                "sesion",
+                true,
+                ip: "127.0.0.1",
+                navegador: "Desconocido"
+            );
+
+            return user;
+        }
+
+        // Generar usuario único
         private async Task<string> GenerarUsuarioUnico(Empleado empleado)
         {
             string usuario;
@@ -217,7 +260,7 @@ namespace sge_api.Services
             return usuario;
         }
 
-        // 🔹 **Generar Email Corporativo**
+        // Generar Email Corporativo
         private async Task GenerarEmailCorporativo(Empleado empleado, string usuario)
         {
             if (!string.IsNullOrEmpty(empleado.EmailCorporativo))
@@ -234,14 +277,13 @@ namespace sge_api.Services
                 if (!string.IsNullOrEmpty(dominio))
                 {
                     empleado.EmailCorporativo = $"{usuario}@{dominio}".ToLower();
-
                     _context.Empleados.Update(empleado);
                     await _context.SaveChangesAsync();
                 }
             }
         }
 
-        // 🔹 **Extraer dominio del sitio web**
+        // Extraer dominio del sitio web
         private string ExtraerDominio(string url)
         {
             try
@@ -258,7 +300,7 @@ namespace sge_api.Services
             }
         }
 
-        // 🔹 **Generar Contraseña Aleatoria**
+        // Generar Contraseña Aleatoria
         private string GenerarContraseñaAleatoria()
         {
             const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
@@ -267,13 +309,33 @@ namespace sge_api.Services
               .Select(s => s[random.Next(s.Length)]).ToArray());
         }
 
-        // 🔹 **Generar Código de Verificación Aleatorio**
+        // Generar Código de Verificación Aleatorio
         private string GenerateVerificationCode()
         {
             using var rng = RandomNumberGenerator.Create();
             var bytes = new byte[4];
             rng.GetBytes(bytes);
             return (Math.Abs(BitConverter.ToInt32(bytes, 0)) % 1000000).ToString("D6");
+        }
+
+        // Registrar eventos en historial_eventos_usuario
+        private async Task RegistrarEventoUsuario(int usuarioId, int empleadoId, string tipoEvento, bool exito, string ip = null, string navegador = null, string razon = null, string motivo = null)
+        {
+            var evento = new HistorialEventosUsuario
+            {
+                UsuarioId = usuarioId,
+                EmpleadoId = empleadoId,
+                TipoEvento = tipoEvento,
+                Exito = exito,
+                Ip = ip,
+                Navegador = navegador,
+                Razon = razon,
+                Motivo = motivo,
+                FechaCambio = DateTime.UtcNow
+            };
+
+            _context.HistorialEventosUsuario.Add(evento);
+            await _context.SaveChangesAsync();
         }
     }
 }

@@ -15,7 +15,9 @@ namespace sge_api.Data
         public DbSet<Empleado> Empleados { get; set; }
         public DbSet<Empresa> Empresas { get; set; }
         public DbSet<Users> Usuarios { get; set; }
-        public DbSet<CodigosVerificacion> CodigosVerificacion { get; set; } 
+        public DbSet<CodigosVerificacion> CodigosVerificacion { get; set; }
+        public DbSet<HistorialEventosUsuario> HistorialEventosUsuario { get; set; }
+
 
 
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

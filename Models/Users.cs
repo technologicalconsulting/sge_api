@@ -16,8 +16,8 @@ namespace sge_api.Models
         public int EmpleadoId { get; set; }
         public Empleado Empleado { get; set; }
 
-        [Column("numero_identificacion")]
-        public string NumeroIdentificacion { get; set; }
+       // [Column("numero_identificacion")]
+       // public string NumeroIdentificacion { get; set; }
 
         [Column("usuario")]
         public string Usuario { get; set; }
