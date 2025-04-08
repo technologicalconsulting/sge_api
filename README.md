@@ -30,30 +30,18 @@ sge_api/
 
 ## ⚙️ Configuración Inicial
 
-### 1. Clonar el repositorio
+### Clonar el repositorio
 ```bash
 git clone https://github.com/technologicalconsulting/sge_api.git
 cd sge_api
 ```
 
-### 2. Configurar el archivo `appsettings.json`
-
-Asegúrate de definir la cadena de conexión a PostgreSQL:
-
-```json
-"ConnectionStrings": {
-  "DefaultConnection": "Host=localhost;Port=5432;Database=sge_db;Username=usuario;Password=contraseña"
-}
-```
-
-> ⚠️ **Importante**: No subas tus credenciales reales a ningún repositorio público.
-
-### 3. Aplicar las migraciones
+### Aplicar las migraciones
 ```bash
 dotnet ef database update
 ```
 
-### 4. Ejecutar la API
+### Ejecutar la API
 ```bash
 dotnet run
 ```
