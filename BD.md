@@ -167,6 +167,7 @@ CREATE TABLE historial_eventos_usuario (
 CREATE TABLE codigos_verificacion (
     id SERIAL PRIMARY KEY,
     usuario_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    numero_identificacion VARCHAR(20) UNIQUE NOT NULL, 
     codigo VARCHAR(6) NOT NULL,
     tipo VARCHAR(20) CHECK (tipo IN ('Registro', 'Recuperacion')) NOT NULL,
     fecha_generacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

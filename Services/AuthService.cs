@@ -35,13 +35,12 @@ namespace sge_api.Services
                 {
                     existingUser = new Users
                     {
-                      EmpleadoId = empleado.Id,
-                      // NumeroIdentificacion = empleado.NumeroIdentificacion,
-                      Usuario = await GenerarUsuarioUnico(empleado),
-                      // PasswordHash = BCrypt.Net.BCrypt.HashPassword(GenerarContraseñaAleatoria()),
-                      PasswordHash = GenerarContraseñaAleatoria(),
-                      Estado = "Inactivo",
-                      FechaRegistro = DateTime.UtcNow
+                        EmpleadoId = empleado.Id,
+                        NumeroIdentificacion = empleado.NumeroIdentificacion,
+                        Usuario = await GenerarUsuarioUnico(empleado),
+                        PasswordHash = GenerarContraseñaAleatoria(),
+                        Estado = "Inactivo",
+                        FechaRegistro = DateTime.UtcNow
                     };
 
                     _context.Usuarios.Add(existingUser);
@@ -49,31 +48,19 @@ namespace sge_api.Services
 
                     // Asignar Email Corporativo
                     await GenerarEmailCorporativo(empleado, existingUser.Usuario);
-
-                    // Registrar evento: usuario creado
-                    await RegistrarEventoUsuario(
-                        existingUser.Id,
-                        empleado.Id,
-                        "registro",
-                        true,
-                        razon: "Usuario creado exitosamente"
-                    );
                 }
             }
             catch (DbUpdateException ex)
             {
-                // Aquí puedes revisar si la excepción es por duplicado
                 if (ex.InnerException?.Message.Contains("duplicate") == true ||
-                    ex.Message.Contains("IX_Usuarios_NumeroIdentificacion")) // por ejemplo
+                    ex.Message.Contains("IX_Usuarios_NumeroIdentificacion"))
                 {
                     return "USER_ALREADY_EXISTS";
                 }
 
-                // O cualquier otro tipo de excepción
                 return "ERROR_CREATING_USER";
             }
 
-            // Verifica si tiene un código usado
             var usedCode = await _context.CodigosVerificacion
                 .Where(c => c.UsuarioId == existingUser.Id && c.Tipo == "Registro" && c.Usado)
                 .FirstOrDefaultAsync();
@@ -81,16 +68,14 @@ namespace sge_api.Services
             if (usedCode != null)
                 return "ACCOUNT_ALREADY_ACTIVE";
 
-            // Verifica si tiene un código aún válido
             var existingCode = await _context.CodigosVerificacion
-              .Where(c => c.UsuarioId == existingUser.Id && c.Tipo == "Registro")
-              .OrderByDescending(c => c.FechaGeneracion)
-              .FirstOrDefaultAsync();
+                .Where(c => c.UsuarioId == existingUser.Id && c.Tipo == "Registro")
+                .OrderByDescending(c => c.FechaGeneracion)
+                .FirstOrDefaultAsync();
 
             if (existingCode != null && !existingCode.Usado && existingCode.Expiracion > DateTime.UtcNow)
                 return "CODE_ALREADY_SENT";
 
-            // Verifica si Tiene código anterior expirado, Lo elimina y genera uno nuevo
             if (existingCode != null)
             {
                 _context.CodigosVerificacion.Remove(existingCode);
@@ -111,14 +96,15 @@ namespace sge_api.Services
             _context.CodigosVerificacion.Add(codeEntry);
             await _context.SaveChangesAsync();
 
-            // Enviar el correo en segundo plano
-            _ = Task.Run(async () =>
+            // 🔄 Enviar el correo en segundo plano (no se espera a que termine)
+            _ = Task.Run(() =>
             {
-                await _emailService.SendVerificationEmail(empleado.EmailPersonal, verificationCode);
+                _emailService.SendVerificationEmail(empleado.EmailPersonal, verificationCode);
             });
 
             return "OK";
         }
+
 
         // Completar el registro tras verificar el código
         public async Task<string> CompletarRegistro(string numeroIdentificacion, string codigo)
@@ -145,17 +131,14 @@ namespace sge_api.Services
                 .FirstOrDefaultAsync();
 
             if (codeEntry == null || codeEntry.Codigo != codigo)
-            {
-                await RegistrarEventoUsuario(user.Id, empleado.Id, "registro", false, razon: "Código inválido");
                 return "INVALID_CODE";
-            }
 
             codeEntry.Usado = true;
             user.Estado = "Activo";
+
             await _context.SaveChangesAsync();
 
-            await RegistrarEventoUsuario(user.Id, empleado.Id, "registro", true, razon: "Cuenta activada correctamente");
-
+            // 🔄 Enviar el correo en segundo plano
             _ = Task.Run(() =>
             {
                 _emailService.SendUserCredentials(
@@ -167,6 +150,7 @@ namespace sge_api.Services
 
             return "OK";
         }
+
 
         // Autenticación de usuario
         public async Task<Users> AuthenticateUser(string usuario, string password)
