@@ -92,9 +92,6 @@ namespace sge_api.Data
                 .WithMany()  // Si en `Empresa` hay una lista de empleados, usa `.WithMany(emp => emp.Empleados)`
                 .HasForeignKey(e => e.EmpresaId)
                 .OnDelete(DeleteBehavior.Restrict);
-
-            modelBuilder.Entity<HistorialEventosUsuario>()
-                .ToTable("historialeventosusuario");
         }
 
         // 🔹 Método para extraer el dominio del sitio web

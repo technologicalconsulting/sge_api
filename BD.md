@@ -147,13 +147,12 @@ CREATE TABLE users(
     fecha_ultimo_login TIMESTAMP DEFAULT NULL
 );
 
+-- Tabla de auditoria 
 CREATE TABLE historial_eventos_usuario (
     id SERIAL PRIMARY KEY,
     usuario_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     empleado_id INTEGER REFERENCES empleado(id) ON DELETE CASCADE,
-    tipo_evento VARCHAR(50) NOT NULL CHECK (tipo_evento IN (
-        'intento_acceso', 'bloqueo', 'recuperacion', 'sesion'
-    )),
+    tipo_evento VARCHAR(50) NOT NULL CHECK (tipo_evento IN ('REGISTRO', 'RECUPERACION', 'LOGIN', 'VALIDACION DE CODIGO')),
     fecha_evento TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     exito BOOLEAN,
     ip VARCHAR(45),

@@ -1,8 +1,11 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 [Table("historial_eventos_usuario")]
 public class HistorialEventosUsuario
 {
+    [Key]
+    [Column("id")]
     public int Id { get; set; }
 
     [Column("usuario_id")]

@@ -5,6 +5,7 @@ using sge_api.Models;
 using System.Threading.Tasks;
 using System;
 using sge_api.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace sge_api.Controllers
 {
@@ -29,10 +30,20 @@ namespace sge_api.Controllers
             var navegador = Request.Headers["User-Agent"].ToString();
             var result = await _authService.GenerarCodigoVerificacion(request.NumeroIdentificacion);
 
+            // Buscar usuario por cédula
+            var usuario = await _context.Usuarios
+                .FirstOrDefaultAsync(u => u.NumeroIdentificacion == request.NumeroIdentificacion);
+
+            // Buscar empleado si aplica
+            var empleado = await _context.Empleados
+                .FirstOrDefaultAsync(e => e.NumeroIdentificacion == request.NumeroIdentificacion);
+
             // Registrar evento
             var evento = new HistorialEventosUsuario
             {
-                TipoEvento = "intento_de_registro",
+                UsuarioId = usuario?.Id,
+                EmpleadoId = empleado?.Id,
+                TipoEvento = "VALIDACION DE CODIGO",
                 FechaEvento = DateTime.UtcNow,
                 Exito = result == "OK",
                 Ip = ip,
