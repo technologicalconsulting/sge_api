@@ -43,12 +43,20 @@ namespace sge_api.Controllers
             {
                 UsuarioId = usuario?.Id,
                 EmpleadoId = empleado?.Id,
-                TipoEvento = "VALIDACION DE CODIGO",
+                NumeroIdentificacion = request.NumeroIdentificacion,
+                TipoEvento = "GENERACION DE CODIGO",
                 FechaEvento = DateTime.UtcNow,
                 Exito = result == "OK",
                 Ip = ip,
                 Navegador = navegador,
-                Razon = result == "NOT_FOUND" ? "Intento de acceso con cédula no registrada" : "Generación de código de verificación",
+                Razon = result switch
+                {
+                    "NOT_FOUND" => "Intento de generación de codigo con empleado no registrado",
+                    "CODE_ALREADY_SENT" => "Ya tiene un código activo",
+                    "NO_CORPORATE_EMAIL" => "Sin email personal asignado",
+                    "OK" => "Verificación exitosa",
+                    _ => "Error interno durante la verificación"
+                },
                 Motivo = result
             };
 
@@ -70,15 +78,52 @@ namespace sge_api.Controllers
         [HttpPost("verify-code")]
         public async Task<IActionResult> VerifyCode([FromBody] VerifyCodeRequest request)
         {
+            var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+            var navegador = Request.Headers["User-Agent"].ToString();
+
             var result = await _authService.CompletarRegistro(request.NumeroIdentificacion, request.Codigo);
+
+            // Buscar usuario por cédula
+            var usuario = await _context.Usuarios
+                .FirstOrDefaultAsync(u => u.NumeroIdentificacion == request.NumeroIdentificacion);
+
+            // Buscar empleado si aplica
+            var empleado = await _context.Empleados
+                .FirstOrDefaultAsync(e => e.NumeroIdentificacion == request.NumeroIdentificacion);
+
+            // Registrar evento
+            var evento = new HistorialEventosUsuario
+            {
+                UsuarioId = usuario?.Id,
+                EmpleadoId = empleado?.Id,
+                NumeroIdentificacion = request.NumeroIdentificacion,
+                TipoEvento = "REGISTRO",
+                FechaEvento = DateTime.UtcNow,
+                Exito = result == "OK",
+                Ip = ip,
+                Navegador = navegador,
+                Razon = result switch
+                {
+                    "NOT_FOUND" => "Intento de verificación con empleado no registrado",
+                    "NO_USER" => "Intento de verificación sin usuario asociado",
+                    "INVALID_CODE" => "Código inválido o expirado",
+                    "NO_CORPORATE_EMAIL" => "Sin email personal asignado",
+                    "OK" => "Verificación exitosa",
+                    _ => "Error interno durante la verificación"
+                },
+                Motivo = result
+            };
+
+            _context.HistorialEventosUsuario.Add(evento);
+            await _context.SaveChangesAsync();
 
             return result switch
             {
-                "OK" => Ok("Registro completado. Credenciales enviadas al email corporativo."),
+                "OK" => Ok("Registro completado. Credenciales enviadas al email personal."),
                 "NOT_FOUND" => BadRequest("El empleado no está registrado."),
                 "NO_USER" => BadRequest("No se encontró un usuario asociado."),
                 "INVALID_CODE" => BadRequest("Código de verificación inválido o expirado."),
-                "NO_CORPORATE_EMAIL" => BadRequest("El usuario no tiene email corporativo asignado."),
+                "NO_PERSONAL_EMAIL" => BadRequest("El usuario no tiene email personal asignado."),
                 _ => StatusCode(500, "Error interno del servidor.")
             };
         }

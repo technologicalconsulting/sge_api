@@ -14,6 +14,9 @@ public class HistorialEventosUsuario
     [Column("empleado_id")]
     public int? EmpleadoId { get; set; }
 
+    [Column("numero_identificacion")]
+    public string NumeroIdentificacion { get; set; }
+
     [Column("tipo_evento")]
     public string TipoEvento { get; set; }
 

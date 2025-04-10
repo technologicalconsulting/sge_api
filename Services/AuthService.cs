@@ -70,11 +70,14 @@ namespace sge_api.Services
                 return "ACCOUNT_ALREADY_ACTIVE";
 
             var existingCode = await _context.CodigosVerificacion
-                .Where(c => c.UsuarioId == existingUser.Id && c.Tipo == "Registro")
-                .OrderByDescending(c => c.FechaGeneracion)
+                .Where(c =>
+                    c.UsuarioId == existingUser.Id &&
+                    c.Tipo == "Registro" &&
+                    !c.Usado &&
+                    c.Expiracion > DateTime.UtcNow)
                 .FirstOrDefaultAsync();
 
-            if (existingCode != null && !existingCode.Usado && existingCode.Expiracion > DateTime.UtcNow)
+            if (existingCode != null)
                 return "CODE_ALREADY_SENT";
 
             if (existingCode != null)
