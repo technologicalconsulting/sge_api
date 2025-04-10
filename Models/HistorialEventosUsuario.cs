@@ -1,20 +1,37 @@
-﻿namespace sge_api.Models
-{
-    public class HistorialEventosUsuario
-    {
-        public int Id { get; set; }
-        public int UsuarioId { get; set; }
-        public int EmpleadoId { get; set; }
-        public string TipoEvento { get; set; }
-        public DateTime FechaEvento { get; set; } = DateTime.UtcNow;
-        public bool Exito { get; set; }
-        public string Ip { get; set; }
-        public string Navegador { get; set; }
-        public string Razon { get; set; }
-        public string Motivo { get; set; }
-        public DateTime? FechaCambio { get; set; }
+﻿using System.ComponentModel.DataAnnotations.Schema;
 
-        public Users Usuario { get; set; }
-        public Empleado Empleado { get; set; }
-    }
+[Table("historial_eventos_usuario")]
+public class HistorialEventosUsuario
+{
+    public int Id { get; set; }
+
+    [Column("usuario_id")]
+    public int? UsuarioId { get; set; }
+
+    [Column("empleado_id")]
+    public int? EmpleadoId { get; set; }
+
+    [Column("tipo_evento")]
+    public string TipoEvento { get; set; }
+
+    [Column("fecha_evento")]
+    public DateTime? FechaEvento { get; set; }
+
+    [Column("exito")]
+    public bool? Exito { get; set; }
+
+    [Column("ip")]
+    public string Ip { get; set; }
+
+    [Column("navegador")]
+    public string Navegador { get; set; }
+
+    [Column("razon")]
+    public string Razon { get; set; }
+
+    [Column("motivo")]
+    public string Motivo { get; set; }
+
+    [Column("fecha_cambio")]
+    public DateTime? FechaCambio { get; set; }
 }

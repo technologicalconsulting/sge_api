@@ -38,6 +38,7 @@ namespace sge_api.Services
                         EmpleadoId = empleado.Id,
                         NumeroIdentificacion = empleado.NumeroIdentificacion,
                         Usuario = await GenerarUsuarioUnico(empleado),
+                        // PasswordHash = BCrypt.Net.BCrypt.HashPassword(GenerarContraseñaAleatoria()),
                         PasswordHash = GenerarContraseñaAleatoria(),
                         Estado = "Inactivo",
                         FechaRegistro = DateTime.UtcNow
@@ -141,11 +142,11 @@ namespace sge_api.Services
             // 🔄 Enviar el correo en segundo plano
             _ = Task.Run(() =>
             {
-                _emailService.SendUserCredentials(
+            /*    _emailService.SendUserCredentials(
                     empleado.EmailPersonal,
                     user.Usuario,
                     "Tu contraseña fue establecida en el registro."
-                );
+                );*/
             });
 
             return "OK";

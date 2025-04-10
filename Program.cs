@@ -11,6 +11,9 @@ var builder = WebApplication.CreateBuilder(args);
 // 🔹 Configurar controladores
 builder.Services.AddControllers();
 
+builder.Services.AddScoped<EmailService>();
+
+
 // 🔹 Configurar conexión a PostgreSQL
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
