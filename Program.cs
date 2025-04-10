@@ -50,7 +50,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
-builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<LoginService>();
+builder.Services.AddScoped<RegisterService>();
 builder.Services.AddScoped<EmailService>();
 
 // 🔹 Configurar Swagger

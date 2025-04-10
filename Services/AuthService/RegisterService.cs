@@ -6,12 +6,12 @@ using BCrypt.Net;
 
 namespace sge_api.Services
 {
-    public class AuthService
+    public class RegisterService
     {
         private readonly AppDbContext _context;
         private readonly EmailService _emailService;
 
-        public AuthService(AppDbContext context, EmailService emailService)
+        public RegisterService(AppDbContext context, EmailService emailService)
         {
             _context = context;
             _emailService = emailService;
@@ -155,66 +155,6 @@ namespace sge_api.Services
             return "OK";
         }
 
-
-        // Autenticación de usuario
-        public async Task<Users> AuthenticateUser(string usuario, string password)
-        {
-            var user = await _context.Usuarios
-                .Include(u => u.Empleado)
-                .ThenInclude(e => e.Empresa)
-                .FirstOrDefaultAsync(u => u.Usuario == usuario);
-
-            if (user == null || user.PasswordHash != password)
-            {
-                if (user != null)
-                {
-                    await RegistrarEventoUsuario(
-                        user.Id,
-                        user.EmpleadoId,
-                        "intento_acceso",
-                        false,
-                        ip: "127.0.0.1",
-                        navegador: "Desconocido",
-                        razon: "Credenciales inválidas"
-                    );
-                }
-
-                return null;
-            }
-
-            if (user.Estado != "Activo")
-            {
-                await RegistrarEventoUsuario(
-                    user.Id,
-                    user.EmpleadoId,
-                    "intento_acceso",
-                    false,
-                    ip: "127.0.0.1",
-                    navegador: "Desconocido",
-                    razon: "Usuario inactivo"
-                );
-
-                return null;
-            }
-
-            if (user.FechaUltimoLogin == null)
-            {
-                user.FechaUltimoLogin = DateTime.UtcNow;
-                await _context.SaveChangesAsync();
-            }
-
-            await RegistrarEventoUsuario(
-                user.Id,
-                user.EmpleadoId,
-                "sesion",
-                true,
-                ip: "127.0.0.1",
-                navegador: "Desconocido"
-            );
-
-            return user;
-        }
-
         // Generar usuario único
         private async Task<string> GenerarUsuarioUnico(Empleado empleado)
         {
@@ -306,24 +246,5 @@ namespace sge_api.Services
             return (Math.Abs(BitConverter.ToInt32(bytes, 0)) % 1000000).ToString("D6");
         }
 
-        // Registrar eventos en historial_eventos_usuario
-        private async Task RegistrarEventoUsuario(int usuarioId, int empleadoId, string tipoEvento, bool exito, string ip = null, string navegador = null, string razon = null, string motivo = null)
-        {
-            var evento = new HistorialEventosUsuario
-            {
-                UsuarioId = usuarioId,
-                EmpleadoId = empleadoId,
-                TipoEvento = tipoEvento,
-                Exito = exito,
-                Ip = ip,
-                Navegador = navegador,
-                Razon = razon,
-                Motivo = motivo,
-                FechaCambio = DateTime.UtcNow
-            };
-
-            _context.HistorialEventosUsuario.Add(evento);
-            await _context.SaveChangesAsync();
-        }
     }
 }

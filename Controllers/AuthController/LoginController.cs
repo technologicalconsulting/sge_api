@@ -5,21 +5,21 @@ using System.Threading.Tasks;
 
 namespace sge_api.Controllers.Auth
 {
-    [Route("api/login")]
+    [Route("api/auth")]
     [ApiController]
     public class LoginController : ControllerBase
     {
-        private readonly AuthService _authService;
+        private readonly LoginService _LoginService;
 
-        public LoginController(AuthService authService)
+        public LoginController(LoginService LoginService)
         {
-            _authService = authService;
+            _LoginService = LoginService;
         }
 
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
-            var user = await _authService.AuthenticateUser(request.Usuario, request.Password);
+            var user = await _LoginService.AuthenticateUser(request.Usuario, request.Password);
 
             if (user == null)
                 return Unauthorized("Credenciales incorrectas o usuario inactivo.");

@@ -14,12 +14,12 @@ namespace sge_api.Controllers
     [Tags("Register")]
     public class AuthController : ControllerBase
     {
-        private readonly AuthService _authService;
+        private readonly RegisterService _RegisterService;
         private readonly AppDbContext _context;
 
-        public AuthController(AuthService authService, AppDbContext context)
+        public AuthController(RegisterService RegisterService, AppDbContext context)
         {
-            _authService = authService;
+            _RegisterService = RegisterService;
             _context = context;
         }
 
@@ -28,7 +28,7 @@ namespace sge_api.Controllers
         {
             var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
             var navegador = Request.Headers["User-Agent"].ToString();
-            var result = await _authService.GenerarCodigoVerificacion(request.NumeroIdentificacion);
+            var result = await _RegisterService.GenerarCodigoVerificacion(request.NumeroIdentificacion);
 
             // Buscar usuario por cédula
             var usuario = await _context.Usuarios
@@ -81,7 +81,7 @@ namespace sge_api.Controllers
             var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
             var navegador = Request.Headers["User-Agent"].ToString();
 
-            var result = await _authService.CompletarRegistro(request.NumeroIdentificacion, request.Codigo);
+            var result = await _RegisterService.CompletarRegistro(request.NumeroIdentificacion, request.Codigo);
 
             // Buscar usuario por cédula
             var usuario = await _context.Usuarios
